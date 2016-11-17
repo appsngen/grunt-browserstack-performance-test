@@ -25,13 +25,16 @@ module.exports = function(grunt) {
         var browserstack;
 
         var writeResult = function (results, consoleLog) {
+            var xmlContent;
 
             if (options.toConsole) {
                 grunt.log.write(consoleLog);
             }
 
-            var xmlContent = xml({testResults: results}, true);
-            grunt.file.write(filePath, xmlContent);
+            if (options.toFile) {
+                xmlContent = xml({testResults: results}, true);
+                grunt.file.write(filePath, xmlContent);
+            }
         };
 
         var calculateResult = function () {
