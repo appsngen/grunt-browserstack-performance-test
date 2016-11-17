@@ -1,4 +1,4 @@
-# grunt-gemini-runner
+# grunt-browserstack-performance-test
 
 > A grunt plugin to run Gemini tests.
 
