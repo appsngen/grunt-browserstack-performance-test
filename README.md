@@ -48,6 +48,12 @@ Default value: `false`
 
 A boolean value that is used to define show result in console or only write in file.
 
+#### options.numberOfRuns
+Type: `Number`
+Default value: `1`
+
+A number value that is used to define number of runs.
+
 ### Usage Examples
 
 In this example, the updated reference screenshots for the local version.
@@ -57,7 +63,8 @@ In this example, the updated reference screenshots for the local version.
     'test': {
         options: {
             filePath: 'my/path/result.xml',
-            toConsole: true
+            toConsole: true,
+            numberOfRuns: 3
         }
     }
 }
