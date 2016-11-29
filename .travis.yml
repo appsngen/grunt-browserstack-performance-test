@@ -1,0 +1,8 @@
+language: node_js
+node_js:
+  - "5.6"
+git:
+  depth: 3
+install: npm install -g jshint
+script:
+- jshint ./ --config ./.hooks/js/config.json
