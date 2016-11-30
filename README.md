@@ -1,6 +1,6 @@
 # grunt-browserstack-performance-test [![Build Status](https://secure.travis-ci.org/appsngen/grunt-browserstack-performance-test.png?branch=master)](https://travis-ci.org/appsngen/grunt-browserstack-performance-test)
 
-> A grunt plugin to run Gemini tests.
+> A grunt plugin to run performance test on Browserstack.
 
 ## Getting Started
 This plugin requires Grunt `~0.4.5`
