@@ -134,7 +134,7 @@ module.exports = function(grunt) {
                         calculateResult();
                         next();
                     } else {
-                        startTask();
+                        setTimeout(startTask, 2500);
                     }
                 }
             });
