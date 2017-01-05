@@ -106,7 +106,7 @@ module.exports = function(grunt) {
 
             if (options.toFile) {
                 xmlContent = formatResultToXml(result);
-                grunt.file.writeln(filePath, xmlContent);
+                grunt.file.write(filePath, xmlContent);
             }
         };
 
