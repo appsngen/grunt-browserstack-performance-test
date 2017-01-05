@@ -27,6 +27,10 @@ module.exports = function(grunt) {
         var config = require('../../../browserstack.json');
 
         var processTestReport = function (reports) {
+            if (!Array.isArray(reports) || reports.length !== config.browsers.length) {
+                throw new Error('Failed to run tests. Go to https://www.browserstack.com/ for more details.');
+            }
+
             reports.forEach(function (report) {
                 var result = {};
 
@@ -97,49 +101,82 @@ module.exports = function(grunt) {
             var xmlContent;
 
             if (options.toConsole) {
-                grunt.log.write(JSON.stringify(result, null, 4));
+                grunt.log.writeln(JSON.stringify(result, null, 4));
             }
 
             if (options.toFile) {
                 xmlContent = formatResultToXml(result);
+                grunt.file.writeln(filePath, xmlContent);
+            }
+        };
+
+        var processError = function (error) {
+            var xmlContent;
+
+            if (options.toConsole) {
+                grunt.log.error(error);
+            }
+
+            if (options.toFile) {
+                xmlContent = xml({
+                    testResults: [
+                        {
+                            error: error.message
+                        }
+                    ]
+                }, true);
+
                 grunt.file.write(filePath, xmlContent);
             }
         };
 
-        var startTask = function () {
-            var callback = (function () {
-                var func;
-                var firstTimeCall = function (error, report) {
-                    if (error) {
-                        grunt.util.error(error);
-                        next(error);
-                    } else {
-                        browserstackProcessFinished++;
+        var startTask = (function () {
+            var testIndex = 0;
 
-                        processTestReport(report);
-
-                        if (browserstackProcessFinished >= numberOfRuns) {
-                            processResults();
-                            next();
+            return function () {
+                var callback = (function () {
+                    var func;
+                    var firstTimeCall = function (error, report) {
+                        if (error) {
+                            grunt.util.error(error);
+                            next(error);
                         } else {
-                            process.nextTick(startTask);
+                            ++browserstackProcessFinished;
+
+                            try {
+                                processTestReport(report);
+                            } catch (error) {
+                                processError(error);
+                                process.exit(1);
+                            }
+
+                            if (browserstackProcessFinished >= numberOfRuns) {
+                                processResults();
+                                next();
+                            } else {
+                                process.nextTick(startTask);
+                            }
                         }
-                    }
-                };
-                var secondTimeCall = function () {
-                    grunt.log.error('Callback is called more than once. It\'s a browserstack-runner\'s bug.');
-                };
+                    };
+                    var secondTimeCall = function () {
+                        grunt.log.error('Callback is called more than once. It\'s a browserstack-runner\'s bug.');
+                    };
 
-                func = firstTimeCall;
+                    func = firstTimeCall;
 
-                return function () {
-                    func.apply(this, arguments);
-                    func = secondTimeCall;
-                };
-            })();
+                    return function () {
+                        func.apply(this, arguments);
+                        func = secondTimeCall;
+                    };
+                })();
 
-            browserstackRunner.run(Object.assign({}, config), callback);
-        };
+                ++testIndex;
+                // jshint ignore: start
+                grunt.log.writeln(`Running: ${testIndex} of ${numberOfRuns}.`);
+                // jshint ignore: end
+                browserstackRunner.run(Object.assign({}, config), callback);
+            };
+        })();
 
         startTask();
     });
