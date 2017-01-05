@@ -1,7 +1,7 @@
 {
   "name": "grunt-browserstack-performance-test",
   "description": "A grunt plugin to run performance test on Browserstack.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "homepage": "https://github.com/appsngen/grunt-browserstack-performance-test",
   "author": {
     "name": "AppsNgen",
