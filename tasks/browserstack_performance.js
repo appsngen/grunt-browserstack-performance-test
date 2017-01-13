@@ -11,15 +11,12 @@
 module.exports = function(grunt) {
     grunt.registerMultiTask('browserstack-performance-test', 'A grunt plugin to run Gemini tests.', function() {
         var options = this.options();
-        var directory = '.';
-        var browserstackCmd = 'browserstack-runner';
         var next = this.async();
         var xml = require('xml');
         var filePath = options.filePath || 'performance-test/result.xml';
         var numberOfRuns = options.numberOfRuns || 3;
         var browserstackProcessFinished = 0;
         var numberDecimalPlaces = 2;
-        var browserstack;
 
         var testResults = {};
 
@@ -171,9 +168,7 @@ module.exports = function(grunt) {
                 })();
 
                 ++testIndex;
-                // jshint ignore: start
                 grunt.log.writeln(`Running: ${testIndex} of ${numberOfRuns}.`);
-                // jshint ignore: end
                 browserstackRunner.run(Object.assign({}, config), callback);
             };
         })();
