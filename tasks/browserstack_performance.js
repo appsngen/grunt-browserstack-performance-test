@@ -9,148 +9,169 @@
 'use strict';
 
 module.exports = function(grunt) {
-
     grunt.registerMultiTask('browserstack-performance-test', 'A grunt plugin to run Gemini tests.', function() {
-
         var options = this.options();
-        var directory = '.';
-        var cmd = 'browserstack-runner';
         var next = this.async();
         var xml = require('xml');
         var filePath = options.filePath || 'performance-test/result.xml';
-        var numberOfRuns = options.numberOfRuns || 1;
+        var numberOfRuns = options.numberOfRuns || 3;
         var browserstackProcessFinished = 0;
-        var responseData = {};
         var numberDecimalPlaces = 2;
-        var browserstack;
 
-        var writeResult = function (results, consoleLog) {
+        var testResults = {};
+
+        var browserstackRunner = require('browserstack-runner');
+        var config = require('../../../browserstack.json');
+
+        var processTestReport = function (reports) {
+            if (!Array.isArray(reports) || reports.length !== config.browsers.length) {
+                throw new Error('Failed to run tests. Go to https://www.browserstack.com/ for more details.');
+            }
+
+            reports.forEach(function (report) {
+                var result = {};
+
+                report.tests[0].assertions.forEach(function (assertion) {
+                    result[assertion.message] = assertion.actual;
+                });
+
+                testResults[report.browser] = testResults[report.browser] || [];
+                testResults[report.browser].push(result);
+            });
+        };
+
+        var calculateResult = function () {
+            var report = [];
+
+            Object.getOwnPropertyNames(testResults).forEach(function (systemInfo) {
+                var result = {};
+
+                result.systemInfo = systemInfo;
+                result.results = testResults[systemInfo].reduce(function (sumObject, testResult) {
+                    sumObject.loadTime += Number(testResult.loadTime);
+                    sumObject.attachTime += Number(testResult.attachTime);
+
+                    return sumObject;
+                }, {
+                    loadTime: 0,
+                    attachTime: 0
+                });
+
+                result.results.loadTime /= numberOfRuns;
+                result.results.attachTime /= numberOfRuns;
+
+                result.results.loadTime = result.results.loadTime.toFixed(numberDecimalPlaces);
+                result.results.attachTime = result.results.attachTime.toFixed(numberDecimalPlaces);
+
+                report.push(result);
+            });
+
+            return report;
+        };
+
+        var formatResultToXml = function (results) {
+            var xmlResults = results.map(function (result) {
+                return {
+                    result: [
+                        {
+                            _attr: {
+                                systemInfo: result.systemInfo
+                            }
+                        },
+                        {
+                            loadTime: result.results.loadTime
+                        },
+                        {
+                            attachTime: result.results.attachTime
+                        }
+                    ]
+                };
+            });
+
+            return xml({
+                testResults: xmlResults
+            }, true);
+        };
+
+        var processResults = function () {
+            var result = calculateResult();
             var xmlContent;
 
             if (options.toConsole) {
-                grunt.log.write(consoleLog);
+                grunt.log.writeln(JSON.stringify(result, null, 4));
             }
 
             if (options.toFile) {
-                xmlContent = xml({testResults: results}, true);
+                xmlContent = formatResultToXml(result);
                 grunt.file.write(filePath, xmlContent);
             }
         };
 
-        var calculateResult = function () {
-            var results = [];
-            var consoleLog = '';
-            var key, loadTime, attachedTime, performanceTestResults, i, systemInfo, length;
+        var processError = function (error) {
+            var xmlContent;
 
-            for (key in responseData) {
-                if (responseData.hasOwnProperty(key)) {
-                    systemInfo = key;
-                    loadTime = 0;
-                    attachedTime = 0;
-                    performanceTestResults = responseData[key];
-                    length = performanceTestResults.length;
+            if (options.toConsole) {
+                grunt.log.error(error);
+            }
 
-                    for (i = 0; i < length; i++) {
-                        loadTime += performanceTestResults[i].loadTime / length;
-                        attachedTime += performanceTestResults[i].attachedTime / length;
-                    }
+            if (options.toFile) {
+                xmlContent = xml({
+                    testResults: [
+                        {
+                            error: error.message
+                        }
+                    ]
+                }, true);
 
-                    loadTime = loadTime.toFixed(numberDecimalPlaces);
-                    attachedTime = attachedTime.toFixed(numberDecimalPlaces);
+                grunt.file.write(filePath, xmlContent);
+            }
+        };
 
-                    results.push({
-                        result: [
-                            {
-                                _attr: {
-                                    systemInfo: systemInfo
-                                }
-                            },
-                            {
-                                loadTime: loadTime
-                            },
-                            {
-                                attachedTime: attachedTime
+        var startTask = (function () {
+            var testIndex = 0;
+
+            return function () {
+                var callback = (function () {
+                    var func;
+                    var firstTimeCall = function (error, report) {
+                        if (error) {
+                            grunt.util.error(error);
+                            next(error);
+                        } else {
+                            ++browserstackProcessFinished;
+
+                            try {
+                                processTestReport(report);
+                            } catch (error) {
+                                processError(error);
+                                process.exit(1);
                             }
-                        ]
-                    });
 
-                    consoleLog += '[' + systemInfo + '] Load Time:' + loadTime +
-                        ' Attached Time:' + attachedTime + '\n';
-                }
-            }
+                            if (browserstackProcessFinished >= numberOfRuns) {
+                                processResults();
+                                next();
+                            } else {
+                                process.nextTick(startTask);
+                            }
+                        }
+                    };
+                    var secondTimeCall = function () {
+                        grunt.log.error('Callback is called more than once. It\'s a browserstack-runner\'s bug.');
+                    };
 
-            writeResult(results, consoleLog);
-        };
+                    func = firstTimeCall;
 
-        var responseProcessing = function (response) {
-            var string = response;
-            var begin, end, systemInfo, result, loadTime, attachedTime;
+                    return function () {
+                        func.apply(this, arguments);
+                        func = secondTimeCall;
+                    };
+                })();
 
-            if (string.indexOf('testResult') !== -1) {
-
-                begin = string.indexOf('[');
-                end = string.indexOf(']');
-
-                if (begin === -1 || end === -1) {
-                    grunt.fail.fatal('Browserstack response processing error.');
-                }
-
-                systemInfo = string.slice(begin + 1, end);
-                begin = string.indexOf('] ');
-                if (begin === -1) {
-                    grunt.fail.fatal('Browserstack response processing error.');
-                }
-
-                try {
-                    result = JSON.parse(string.slice(begin + 1));
-                } catch (err) {
-                    return;
-                }
-                loadTime = Number(result.testResult.loadTime);
-                attachedTime = Number(result.testResult.attachedTime);
-
-                responseData[systemInfo] = responseData[systemInfo] || [];
-                responseData[systemInfo].push({
-                    loadTime: loadTime,
-                    attachedTime: attachedTime
-                });
-            }
-        };
-
-        var startTask = function () {
-            browserstack = grunt.util.spawn({
-                cmd: cmd,
-                args: [],
-                opts: {
-                    cwd: directory
-                }
-            }, function (err, result, code) {
-                if (err) {
-                    grunt.fail.fatal(err, code);
-                    next(code);
-                } else {
-                    browserstackProcessFinished++;
-                    if (browserstackProcessFinished === numberOfRuns) {
-                        calculateResult();
-                        next();
-                    } else {
-                        setTimeout(startTask, 2500);
-                    }
-                }
-            });
-
-            if (typeof browserstack === 'undefined') {
-                grunt.fail.fatal('Browserstack-runner task failed.');
-            }
-
-            browserstack.stdout.on('data', function (buf) {
-                var string = String(buf);
-                responseProcessing(string);
-            });
-            browserstack.stderr.on('data', function (buf) {
-                grunt.log.error(String(buf));
-            });
-        };
+                ++testIndex;
+                grunt.log.writeln(`Running: ${testIndex} of ${numberOfRuns}.`);
+                browserstackRunner.run(Object.assign({}, config), callback);
+            };
+        })();
 
         startTask();
     });
